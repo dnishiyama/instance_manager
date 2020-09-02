@@ -2,6 +2,8 @@ try:
 	import boto3, requests, json, logging, time as pytime, pytz
 	from datetime import datetime, timezone
 	from dgnutils import notify
+	import googleapiclient.discovery
+	compute = googleapiclient.discovery.build('compute', 'v1')
 
 	ec2 = boto3.client('ec2')
 	pricing = boto3.client('pricing') # create the client
@@ -65,6 +67,12 @@ def get_price(instance_type, region_name):
 	:param region_name is the name such as 'US East (N. Virginia)'
 	:return price (float)
 	"""
+
+	# Manage GCP instances through hard-coding
+	if instance_type == 'n1-highmem-8' and 'us-east1' in region_name: # us-east1-c or us-east1-b
+		logging.info('Returning hard-coded cost for n1-highmem-8 of 2.14')
+		return 2.14 # Calced from billing
+
 	response = pricing.get_products(
 		ServiceCode='AmazonEC2',
 		Filters=[
@@ -84,6 +92,8 @@ def get_price(instance_type, region_name):
 # To check for which instances are running and give info on them
 def get_instance_details():    
 	instance_details = []
+
+	# Get AWS Info
 	reservations = ec2.describe_instances().get('Reservations'); reservations#.keys()
 	instances = [next(iter(i.get('Instances', {}))) for i in reservations]; instances
 	for instance in instances:
@@ -104,13 +114,38 @@ def get_instance_details():
 			'Price':price
 		}
 		instance_details.append(details); instance_details
+
+	# Get GCP Infoi
+	gcp_project = 'fast-ai-course-v3-dnish123'
+	zone_list = compute.instances().aggregatedList(project=gcp_project).execute()
+	logging.info(f'Getting GCP information for {gcp_project} solely')
+	for zone, data in zone_list['items'].items():
+		if not 'instances' in data: continue
+		for instance in data['instances']:	 
+			i_type = instance['machineType'].split('/')[-1]
+			r_name = zone.lstrip('zones/')
+			details = {
+				'InstanceType': i_type, 
+				'Started':None,
+				'RunningDuration':None,
+				'State':instance['status'].lower(),
+				'Name':instance['name'],
+				'Region': r_name,
+				'Price': get_price(i_type, r_name),
+				}
+			instance_details.append(details)
+
 	return instance_details
 
 def get_monthly_spend(instance_details):
 	"""
 	:param instance_details comes from get_instance_details and is a list of dicts
 	"""
-	monthly_spend = sum(d['Price']*24*30 for d in instance_details if d['State'] != 'stopped'); monthly_spend
+	monthly_spend = 0
+	stopped_states = ['stopped', 'terminated', 'stopping']
+	for d in instance_details:
+		if not d['State'] in stopped_states:
+			monthly_spend += d['Price'] * 24 * 30 
 	return monthly_spend
 
 def get_notification_message(instance_details):

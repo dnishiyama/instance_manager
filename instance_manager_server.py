@@ -1,7 +1,7 @@
 try:
 	import argparse
 	from dgnutils import notify, log_level
-	from notification_functions import run_server
+	from instance_manager_functions import run_server
 except Exception as e:
 	print('Could not complete imports, are you running as py37 conda environment?')
 	print()
@@ -19,4 +19,4 @@ if __name__ == "__main__":
 		run_server(int(args.daily_spend_threshold), [int(d) for d in args.daily_summary_times], int(args.interval_mins))
 		#print(args.daily_spend_threshold)
 	except Exception as e:
-		notify(f'Notification server has shutdown! {e}')
+		notify(f'Instance manager server has shutdown! {e}')
