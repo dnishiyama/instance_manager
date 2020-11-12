@@ -160,16 +160,17 @@ def get_notification_message(instance_details):
 		notification_message += f"\n${price}: {i_type}, {name[:10]}- on {running} days"
 	return notification_message
 
-def run_server(daily_spend_threshold:int=0, daily_summary_times:list=[], interval_mins:int=60):
+def run_server(daily_spend_threshold:int=0, daily_summary_times:list=[], interval_mins:int=60, weekly_summary_day=None):
 	"""
 	:param daily_spend_threshold (int) number of dollars over which daily spend will be notified
 	:param daily_summary_times (int list) 24hr times to log instances
 	:param interval_mins is the number of minutes to wait between running this program
 	"""
-	logging.info('Version 1.0 - 08/30/20')
+	logging.info('Version 2.0 - 11/12/20')
 	logging.info(f'daily_spend_threshold: {daily_spend_threshold}, {type(daily_spend_threshold)}')
 	logging.info(f'daily_summary_times: {daily_summary_times}, {type(daily_summary_times)}')
 	logging.info(f'interval_mins: {interval_mins}, {type(interval_mins)}')
+	logging.info(f'weekly_summary_day: {weekly_summary_day}')
 	
 	# initialization
 	past_notifications = {} # dict of dates and hours
@@ -178,6 +179,7 @@ def run_server(daily_spend_threshold:int=0, daily_summary_times:list=[], interva
 		now = datetime.now().astimezone(pytz.timezone('US/Eastern'))
 		date = now.strftime('%m-%d'); date
 		hour = int(now.strftime('%H')); hour
+		weekday_number = int(now.strftime('%w')); weekday_number # 0 is sunday
 
 		# print(hour, type(hour))
 		# print(daily_summary_times, type(daily_summary_times), type(daily_summary_times[0]))
@@ -190,13 +192,14 @@ def run_server(daily_spend_threshold:int=0, daily_summary_times:list=[], interva
 			notify(f"WARNING: High cloud spend\n {get_notification_message(instance_details)}")
 
 		# If the time is right for a always-notify
-		elif hour in daily_summary_times and hour not in past_notifications.setdefault(date, []): 
-			# Do the notification
-			logging.info(f'Summary notification at hour {hour}')
-			notify(get_notification_message(instance_details))
+		elif weekday_number == weekly_summary_day or weekly_summary_day == None:
+			if hour in daily_summary_times and hour not in past_notifications.setdefault(date, []): 
+				# Do the notification
+				logging.info(f'Summary notification at hour {hour}')
+				notify(get_notification_message(instance_details))
 
-			# Store
-			past_notifications[date].append(hour)
+				# Store
+				past_notifications[date].append(hour)
 
 		# print(f'Sleeping {60*interval_mins} seconds')
 		pytime.sleep(60 * interval_mins)
